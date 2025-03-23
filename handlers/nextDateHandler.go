@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Функция NextDateHandler высчитывает следующую дату по правилу
 func NextDateHandler(w http.ResponseWriter, r *http.Request) {
 
 	nowStr := r.URL.Query().Get("now")

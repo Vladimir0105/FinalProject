@@ -7,6 +7,7 @@ import (
 	"net/http"
 )
 
+// Функция ReturnTaskHandler возвращает задачу по идентификатору
 func ReturnTaskHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	var returnTask functions.Schedule

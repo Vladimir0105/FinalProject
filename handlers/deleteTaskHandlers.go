@@ -7,6 +7,7 @@ import (
 	"net/http"
 )
 
+// Функция DeleteTaskHandler удаляет задачу по идентификатору
 func DeleteTaskTaskHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	var task functions.Schedule
@@ -20,19 +21,7 @@ func DeleteTaskTaskHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		return
 	}
 
-	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM scheduler WHERE id = ?)", task.Id).Scan(&exists)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Ошибка при поиске задачи по идентификатору"})
-		return
-	}
-
-	if !exists {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Ошибка при поиске задачи"})
-		return
-	}
+	functions.SearchTaskById(w, r, db)
 
 	_, err = db.Exec("DELETE FROM scheduler WHERE id = ?", task.Id)
 	if err != nil {
