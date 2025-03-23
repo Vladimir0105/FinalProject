@@ -13,7 +13,7 @@ const (
 	limit = 10
 )
 
-// Функция UpcomingTaskHandler возвращает список , отсортированных по дате задач
+// Функция UpcomingTaskHandler показывает ближайшие задачи отсортированые по дате
 func UpcomingTaskHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 
 	rows, err := db.Query("SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date ASC LIMIT ?", limit)

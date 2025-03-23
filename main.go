@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/gorilla/mux"
-
 	_ "modernc.org/sqlite"
 )
 
@@ -27,10 +25,13 @@ func main() {
 
 	defer db.Close()
 
-	r := mux.NewRouter()
+	err = functions.UpdateDateBd(db)
+	if err != nil {
+		log.Fatal("Ошибка обновления даты задачи в базе данных")
+	}
 
-	r.HandleFunc("/api/nextdate", handlers.NextDateHandler)
-	r.HandleFunc("/api/task", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/nextdate", handlers.NextDateHandler)
+	http.HandleFunc("/api/task", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
 			handlers.AddTaskHandler(w, r, db)
@@ -46,10 +47,10 @@ func main() {
 			return
 		}
 	})
-	r.HandleFunc("/api/tasks", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/tasks", func(w http.ResponseWriter, r *http.Request) {
 		handlers.UpcomingTaskHandler(w, r, db)
 	})
-	r.HandleFunc("/api/task/done", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/task/done", func(w http.ResponseWriter, r *http.Request) {
 		handlers.CompletTaskHandler(w, r, db)
 	})
 

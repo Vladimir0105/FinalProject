@@ -2,22 +2,17 @@ package functions
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 
 	_ "modernc.org/sqlite"
 )
 
 const dbFileName = "scheduler.db"
 
-// Функция InitDB открывает или создаёт(если БД не существует) новую базу данных
+// Функция InitDB создаёт подключение к базе данных или создаёт её, если её не существует
 func InitDB() (*sql.DB, error) {
 	appPath, err := os.Getwd()
 
@@ -59,13 +54,14 @@ func InitDB() (*sql.DB, error) {
 			if err := createIndexes(db); err != nil {
 				log.Fatal("Ошибка создания индексов:", err)
 			}
+
 		}
 	}
 
 	return db, nil
 }
 
-// Функция createTables создаёт в базе данных нужную нам таблицу
+// Функция createTables создаёт таблицу в базе данных
 func createTables(db *sql.DB) error {
 	sql := `
 		CREATE TABLE scheduler (
@@ -83,58 +79,13 @@ func createTables(db *sql.DB) error {
 	return err
 }
 
-// Функция createIndexes создаёт индекс по столбцу date
+// Функция createIndexes создаёт индексы по столбцу date
 func createIndexes(db *sql.DB) error {
 	sql := `
 		CREATE INDEX scheduler_date ON scheduler (date);`
 
 	_, err := db.Exec(sql)
 	return err
-}
-
-// Функция NextDate вычисляет следующую дату по правилу repeat
-func NextDate(now time.Time, date string, repeat string) (string, error) {
-
-	dateTime, err := time.Parse("20060102", date)
-	if err != nil {
-		return "", err
-	}
-
-	repeatSlice := strings.Split(repeat, " ")
-
-	if len(repeatSlice) == 0 {
-		return "", fmt.Errorf("значений в repeat нету")
-	}
-
-	switch repeatSlice[0] {
-	case "y":
-		dateTime = dateTime.AddDate(1, 0, 0)
-		for !dateTime.After(now) {
-			dateTime = dateTime.AddDate(1, 0, 0)
-		}
-		return dateTime.Format("20060102"), nil
-
-	case "d":
-		if len(repeatSlice) < 2 {
-			return "", fmt.Errorf("неккоректный формат данных")
-		}
-		numberOfDays, err := strconv.Atoi(repeatSlice[1])
-		if err != nil {
-			log.Println("Ошибка преобразования строки в число")
-			return "", err
-		}
-		if numberOfDays < 1 || numberOfDays > 400 {
-			return "", fmt.Errorf("некоректное количество дней")
-		}
-
-		dateTime = dateTime.AddDate(0, 0, numberOfDays)
-		for !dateTime.After(now) {
-			dateTime = dateTime.AddDate(0, 0, numberOfDays)
-		}
-		return dateTime.Format("20060102"), nil
-	default:
-		return "", fmt.Errorf("неккоректный формат данных")
-	}
 }
 
 type Schedule struct {
@@ -145,7 +96,7 @@ type Schedule struct {
 	Repeat  string `json:"repeat"`
 }
 
-// Функция ExtractValues извлекает значения из базы данных
+// Функция ExtractValues извлекает значения из таблтцы
 func ExtractValues(db *sql.DB) ([]Schedule, error) {
 
 	rows, err := db.Query("SELECT repeat, date FROM scheduler")
@@ -172,68 +123,4 @@ func ExtractValues(db *sql.DB) ([]Schedule, error) {
 	}
 
 	return schedules, nil
-}
-
-// Функция SearchTaskById проверяет наличие задачи по идентификатору
-func SearchTaskById(w http.ResponseWriter, r *http.Request, db *sql.DB) (bool, error) {
-
-	var task Schedule
-	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM scheduler WHERE id = ?)", task.Id).Scan(&exists)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return false, json.NewEncoder(w).Encode(map[string]string{"error": "Ошибка при поиске задачи по идентификатору"})
-	}
-
-	if !exists {
-		w.WriteHeader(http.StatusInternalServerError)
-
-		return false, json.NewEncoder(w).Encode(map[string]string{"error": "Ошибка при поиске задачи"})
-	}
-	return true, nil
-}
-
-// Функция UpdateTaskDateInDB обновляет значение даты по правилу в базе данных
-func UpdateTaskDateInDB(w http.ResponseWriter, r *http.Request, db *sql.DB) (Schedule, error) {
-
-	var scheduler Schedule
-
-	err := json.NewDecoder(r.Body).Decode(&scheduler)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return Schedule{}, json.NewEncoder(w).Encode(map[string]string{"error": "Неверный формат json"})
-	}
-
-	if scheduler.Title == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		return Schedule{}, json.NewEncoder(w).Encode(map[string]string{"error": "Поле title обязательно"})
-	}
-
-	if scheduler.Date == "" {
-		scheduler.Date = time.Now().Format("20060102")
-	} else {
-		_, err := time.Parse("20060102", scheduler.Date)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return Schedule{}, json.NewEncoder(w).Encode(map[string]string{"error": "Неверный формат даты, используйте формат 20060102"})
-		}
-	}
-
-	if scheduler.Repeat != "" && scheduler.Date != time.Now().Format("20060102") {
-		nextDate, err := NextDate(time.Now(), scheduler.Date, scheduler.Repeat)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return Schedule{}, json.NewEncoder(w).Encode(map[string]string{"error": "Ошибка вычисления следущей даты"})
-		}
-		scheduler.Date = nextDate
-	} else {
-		scheduler.Date = time.Now().Format("20060102")
-	}
-
-	if scheduler.Id == "" {
-		w.WriteHeader(http.StatusInternalServerError)
-		return Schedule{}, json.NewEncoder(w).Encode(map[string]string{"error": "id не может быть пустым"})
-	}
-
-	return scheduler, nil
 }
